@@ -13,6 +13,19 @@ public class GameClock {
     private int ticks = 0;
     private Weather weather = Weather.SUNNY;   // day 1 is always fine
 
+    // เก็บกลยุทธ์การสุ่มอากาศที่ได้รับจาก GamePanel
+    private final WeatherStrategy weatherStrategy;
+
+    // Constructor เดิมยังใช้ได้ โดยกำหนดให้เป็นโหมด normal
+    public GameClock() {
+        this(new NormalWeatherStrategy());
+    }
+
+    // รับ Strategy ที่ต้องการใช้จากภายนอก
+    public GameClock(WeatherStrategy weatherStrategy) {
+        this.weatherStrategy = weatherStrategy;
+    }
+
     public void tick() {
         if (++ticks >= TICKS_PER_STEP) {
             ticks = 0;
@@ -26,7 +39,9 @@ public class GameClock {
         day++;
         minutes = DAY_START;
         ticks = 0;
-        weather = Weather.forecast(rng);
+        
+        // ใช้ Strategy ที่เลือกไว้ในการสุ่มอากาศของวันใหม่
+        weather = weatherStrategy.forecast(rng);
     }
 
     public int getDay() { return day; }

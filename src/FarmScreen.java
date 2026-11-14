@@ -22,7 +22,7 @@ public class FarmScreen implements Screen {
     private final Random rng = new Random();
     private final Farm farm = new Farm();
     private final Farmer farmer = new Farmer(DOOR_COL, DOOR_ROW, STARTING_GOLD);
-    private final GameClock clock = new GameClock();
+    private final GameClock clock; 
     private final Bag<String> shippedToday = new Bag<>();   // paid out when the farmer sleeps
     private final List<FloatingText> floatingTexts = new ArrayList<>();
     private Checklist checklist;                           // only on the first day of a new game
@@ -32,6 +32,10 @@ public class FarmScreen implements Screen {
 
     private FarmScreen(GamePanel game) {
         this.game = game;
+
+        // ส่ง Strategy จาก GamePanel ให้ GameClock
+        this.clock = new GameClock(game.getWeatherStrategy());
+
         farmer.getSeedBag("Turnip").addSeeds(STARTING_SEEDS);
     }
 
@@ -131,6 +135,12 @@ public class FarmScreen implements Screen {
             Tool tool = farmer.toolFor(tile);
             if (tool == null) throw new FarmException(tile.hasCrop() ? "Already watered - it grows tonight" : "Nothing to do here");
             farmer.use(tool, tile);
+
+            // ถ้าวันนี้ฝนตก ให้ดินที่เพิ่งปลูกได้รับน้ำทันที
+            if (tool instanceof SeedBag && clock.getWeather().watersCrops()) {
+                tile.soak();
+            }
+            
             if (checklist != null && tool instanceof SeedBag) checklist.complete(Checklist.Step.PLANT);
             if (checklist != null && tool instanceof WateringCan) checklist.complete(Checklist.Step.WATER);
         } catch (FarmException e) {
