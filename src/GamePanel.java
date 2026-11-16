@@ -22,10 +22,22 @@ public class GamePanel extends JPanel implements ActionListener {
     private final Timer timer = new Timer(16, this);
     private final Set<Integer> keysDown = new HashSet<>();
     private final SaveGame saveGame = new SaveGame("littlefarm_save.txt");
+
+    // เก็บ Strategy การสุ่มสภาพอากาศที่เลือกตอนเริ่มเกม
+    private final WeatherStrategy weatherStrategy;
+
     private Screen screen;
     private int frames;
 
     public GamePanel() {
+        // รองรับการสร้าง GamePanel แบบเดิม โดยใช้โหมด normal
+        this(new NormalWeatherStrategy());
+    }
+
+    public GamePanel(WeatherStrategy weatherStrategy) {
+        // เก็บ Strategy ที่ Main ส่งเข้ามา
+        this.weatherStrategy = weatherStrategy;
+
         setPreferredSize(new Dimension((int) (Ui.WIDTH * START_SCALE), (int) (Ui.HEIGHT * START_SCALE)));
         setBackground(Color.BLACK);   // the bars beside the game when the window's shape doesn't match
         setFocusable(true);
@@ -55,6 +67,10 @@ public class GamePanel extends JPanel implements ActionListener {
     public void setScreen(Screen next) { screen = next; }
     public void showTitle() { screen = new TitleScreen(this); }
     public SaveGame getSaveGame() { return saveGame; }
+
+    // ส่ง Strategy ให้หน้าฟาร์มเรียกใช้งาน
+    public WeatherStrategy getWeatherStrategy() { return weatherStrategy; } 
+    
     public int getFrames() { return frames; }
 
     public boolean isHeld(int key, int otherKey) {
