@@ -1,6 +1,7 @@
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -67,6 +68,11 @@ public class SaveGameTest {
         new SaveGame(first.toString()).loadInto(b.farm, b.farmer, b.clock, b.machine);
         new SaveGame(second.toString()).save(b.farm, b.farmer, b.clock, b.machine);
         check("saving the loaded game gives an identical file", Arrays.equals(Files.readAllBytes(first), Files.readAllBytes(second)));
+        check("the title menu can describe the new save format",
+                "Day 7, 555G".equals(new SaveGame(first.toString()).describe()));
+        checkDeletedEntry(first, temp.resolve("without-soil.txt"), "soil");
+        checkDeletedEntry(first, temp.resolve("without-villager.txt"), "villager");
+        checkDeletedEntry(first, temp.resolve("without-last-entry.txt"), "machine");
         check("no .tmp file is left behind", !Files.exists(temp.resolve("first.txt.tmp")));
 
         System.out.println("== damaged files (data/save_cases/index.txt) ==");
@@ -109,6 +115,28 @@ public class SaveGameTest {
         } catch (Exception e) {
             check(file + " -> CRASHED with " + e, false);   // anything else escaping is exactly what must never happen
         }
+    }
+
+    private static void checkDeletedEntry(Path save, Path damagedSave, String entryName) throws Exception {
+        List<String> lines = new ArrayList<>(Files.readAllLines(save));
+        for (int i = 1; i < lines.size(); i++) {
+            String[] parts = lines.get(i).split(" ", 3);
+            if (parts.length != 3 || !parts[0].equals("entry") || !parts[2].startsWith(entryName + " ")) continue;
+
+            int expectedLine = Integer.parseInt(parts[1]) + 1;
+            lines.remove(i);
+            Files.write(damagedSave, lines, java.nio.charset.StandardCharsets.UTF_8);
+            Game g = new Game();
+            try {
+                new SaveGame(damagedSave.toString()).loadInto(g.farm, g.farmer, g.clock, g.machine);
+                check("deleting " + entryName + " is rejected", false);
+            } catch (CorruptSaveException e) {
+                check("deleting " + entryName + " reports the missing line",
+                        e.getLineNumber() == expectedLine);
+            }
+            return;
+        }
+        check("test save contains a " + entryName + " entry", false);
     }
 
     private static void check(String name, boolean ok) {

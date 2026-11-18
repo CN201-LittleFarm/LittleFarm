@@ -16,18 +16,19 @@ import java.util.Set;
 
 /**
  * Saves the farm as plain text you can open and read, e.g.
- *   day 4
- *   weather RAINY
- *   gold 380
- *   seeds Turnip 2
- *   request Turnip 3 360 4     (crop amount reward daysLeft)
- *   soil 5 6 Turnip 1 wet      (col row crop daysGrown wet/dry; "-" for an empty plot)
- *   machine PROCESSING 2 Strawberry Cake   (state nightsLeft recipe name; see SavableMachine)
+ *   entry 1 day 4
+ *   entry 2 weather RAINY
+ *   entry 3 gold 380
+ *   entry 4 seeds Turnip 2
+ *   entry 5 request Turnip 3 360 4     (crop amount reward daysLeft)
+ *   entry 6 soil 5 6 Turnip 1 wet      (col row crop daysGrown wet/dry; "-" for an empty plot)
+ *   entry 7 machine PROCESSING 2 Strawberry Cake
  *
  * A damaged file never crashes the game: loadInto refuses it with an exception that names the line.
  */
 public class SaveGame {
-    private static final String HEADER = "little-farm save 1";
+    private static final String LEGACY_HEADER = "little-farm save 1";
+    private static final String HEADER_PREFIX = "little-farm save 2";
     private final Path file;
 
     public SaveGame(String fileName) {
@@ -44,8 +45,9 @@ public class SaveGame {
         String day = "?", gold = "?";
         try {
             for (String line : Files.readAllLines(file)) {
-                if (line.startsWith("day ")) day = line.substring(4);
-                else if (line.startsWith("gold ")) gold = line.substring(5);
+                String entry = entryText(line);
+                if (entry.startsWith("day ")) day = entry.substring(4);
+                else if (entry.startsWith("gold ")) gold = entry.substring(5);
             }
         } catch (IOException e) {
             return "unreadable save";
@@ -65,37 +67,42 @@ public class SaveGame {
 
     /** @param machine the processing machine, or null while there is none */
     public void save(Farm farm, Farmer farmer, GameClock clock, SavableMachine machine) throws IOException {
+        List<String> entries = new ArrayList<>();
+        entries.add("day " + clock.getDay());
+        entries.add("weather " + clock.getWeather().name());
+        entries.add("gold " + farmer.getGold());
+        entries.add("earned " + farmer.getTotalEarned());
+        entries.add("can " + farmer.getCan().getWater());
+        for (String name : CropFactory.NAMES) entries.add("seeds " + name + " " + farmer.getSeedBag(name).getSeeds());
+        for (Map.Entry<String, Integer> entry : farmer.getBasket().asMap().entrySet()) {
+            entries.add("basket " + entry.getKey() + " " + entry.getValue());
+        }
+        Villager villager = farm.getVillager();
+        entries.add("villager " + villager.getFriendship() + " " + villager.getRequestsDone());
+        Request request = villager.getRequest();
+        if (request != null) {
+            entries.add("request " + request.getCropName() + " " + request.getAmount() + " "
+                    + request.getReward() + " " + request.getDaysLeft());
+        }
+        for (int r = 0; r < Farm.ROWS; r++) {
+            for (int c = 0; c < Farm.COLS; c++) {
+                Tile tile = farm.tileAt(c, r);
+                if (tile.getType() != TileType.SOIL) continue;
+                Crop crop = tile.getCrop();
+                entries.add("soil " + c + " " + r + " " + (crop == null ? "- 0" : crop.getName() + " " + crop.getDaysGrown())
+                        + (tile.isWatered() ? " wet" : " dry"));
+            }
+        }
+        if (machine != null) {
+            entries.add("machine " + machine.getSavedState() + " " + machine.getSavedNights() + " " + machine.getSavedRecipeName());
+        }
+
         // write to a temporary file first: a crash half-way must not destroy the good save (Week 11)
         Path temp = file.resolveSibling(file.getFileName() + ".tmp");
         try (PrintWriter out = new PrintWriter(Files.newBufferedWriter(temp, StandardCharsets.UTF_8))) {
-            out.println(HEADER);
-            out.println("day " + clock.getDay());
-            out.println("weather " + clock.getWeather().name());
-            out.println("gold " + farmer.getGold());
-            out.println("earned " + farmer.getTotalEarned());
-            out.println("can " + farmer.getCan().getWater());
-            for (String name : CropFactory.NAMES) out.println("seeds " + name + " " + farmer.getSeedBag(name).getSeeds());
-            for (Map.Entry<String, Integer> entry : farmer.getBasket().asMap().entrySet()) {
-                out.println("basket " + entry.getKey() + " " + entry.getValue());
-            }
-            Villager villager = farm.getVillager();
-            out.println("villager " + villager.getFriendship() + " " + villager.getRequestsDone());
-            Request request = villager.getRequest();
-            if (request != null) {
-                out.println("request " + request.getCropName() + " " + request.getAmount() + " "
-                        + request.getReward() + " " + request.getDaysLeft());
-            }
-            for (int r = 0; r < Farm.ROWS; r++) {
-                for (int c = 0; c < Farm.COLS; c++) {
-                    Tile tile = farm.tileAt(c, r);
-                    if (tile.getType() != TileType.SOIL) continue;
-                    Crop crop = tile.getCrop();
-                    out.println("soil " + c + " " + r + " " + (crop == null ? "- 0" : crop.getName() + " " + crop.getDaysGrown())
-                            + (tile.isWatered() ? " wet" : " dry"));
-                }
-            }
-            if (machine != null) {
-                out.println("machine " + machine.getSavedState() + " " + machine.getSavedNights() + " " + machine.getSavedRecipeName());
+            out.println(HEADER_PREFIX + " records " + entries.size());
+            for (int i = 0; i < entries.size(); i++) {
+                out.println("entry " + (i + 1) + " " + entries.get(i));
             }
         }
         Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE);   // the swap happens all at once, or not at all
@@ -117,13 +124,50 @@ public class SaveGame {
     public void loadInto(Farm farm, Farmer farmer, GameClock clock, SavableMachine machine)
             throws UnreadableSaveException, CorruptSaveException {
         List<String> lines = readLines();
-        if (!lines.get(0).replace("﻿", "").trim().equals(HEADER)) {   // ﻿: the invisible mark some editors add
+        String header = lines.get(0).replace("﻿", "").trim();   // ﻿: the invisible mark some editors add
+        boolean version2 = header.startsWith(HEADER_PREFIX + " ");
+        int expectedEntries = -1;
+        if (version2) {
+            String[] headerParts = header.split(" ");
+            try {
+                if (headerParts.length != 5 || !headerParts[3].equals("records")) {
+                    throw new IllegalArgumentException("invalid save header");
+                }
+                expectedEntries = count(headerParts[4]);
+            } catch (IllegalArgumentException e) {
+                throw new CorruptSaveException(1, lines.get(0), "invalid save header", e);
+            }
+        } else if (!header.equals(LEGACY_HEADER)) {
             throw new CorruptSaveException(1, lines.get(0), "this is not a Little Farm save", null);
         }
 
         Set<String> seen = new HashSet<>();   // which entries the file had, to notice a deleted line
+        int expectedEntryNumber = 1;
+        int basketEntries = 0;
         for (int i = 1; i < lines.size(); i++) {
-            String[] parts = lines.get(i).trim().split(" ");
+            String line = lines.get(i);
+            String entryLine = line;
+            if (version2) {
+                String[] numbered = line.trim().split(" ", 3);
+                if (numbered.length != 3 || !numbered[0].equals("entry")) {
+                    throw new CorruptSaveException(i + 1, line, "expected numbered save entry " + expectedEntryNumber, null);
+                }
+                int entryNumber;
+                try {
+                    entryNumber = Integer.parseInt(numbered[1]);
+                } catch (NumberFormatException e) {
+                    throw new CorruptSaveException(i + 1, line, "a save entry number was expected", e);
+                }
+                if (entryNumber != expectedEntryNumber) {
+                    throw missing("save entry " + expectedEntryNumber, expectedEntryNumber + 1);
+                }
+                if (expectedEntryNumber > expectedEntries) {
+                    throw new CorruptSaveException(i + 1, line, "there are more entries than the header says", null);
+                }
+                expectedEntryNumber++;
+                entryLine = numbered[2];
+            }
+            String[] parts = entryLine.trim().split(" ");
             try {
                 switch (parts[0]) {
                     case "day":     clock.setDay(count(parts[1])); break;
@@ -142,22 +186,28 @@ public class SaveGame {
                         farmer.getSeedBag(parts[1]).setSeeds(count(parts[2]));
                         seen.add("seeds " + parts[1]);
                         break;
-                    case "basket": loadBasket(farmer, lines.get(i)); break;
+                    case "basket":
+                        loadBasket(farmer, entryLine);
+                        basketEntries++;
+                        break;
                     case "soil":   loadSoil(farm, parts); break;
-                    case "machine": loadMachine(machine, lines.get(i)); break;
+                    case "machine": loadMachine(machine, entryLine); break;
                     case "":       break;   // blank line
                     default:       throw new IllegalArgumentException("unknown entry '" + parts[0] + "'");
                 }
                 seen.add(parts[0]);
             } catch (NumberFormatException e) {            // specific first, then the general ones (Week 10)
-                throw new CorruptSaveException(i + 1, lines.get(i), "a whole number was expected", e);
+                throw new CorruptSaveException(i + 1, line, "a whole number was expected", e);
             } catch (IndexOutOfBoundsException e) {
-                throw new CorruptSaveException(i + 1, lines.get(i), "a value is missing", e);
+                throw new CorruptSaveException(i + 1, line, "a value is missing", e);
             } catch (IllegalArgumentException | FarmException e) {
-                throw new CorruptSaveException(i + 1, lines.get(i), e.getMessage(), e);
+                throw new CorruptSaveException(i + 1, line, e.getMessage(), e);
             }
         }
-        checkNothingIsMissing(seen);
+        if (version2 && expectedEntryNumber <= expectedEntries) {
+            throw missing("save entry " + expectedEntryNumber, expectedEntryNumber + 1);
+        }
+        checkNothingIsMissing(seen, version2, basketEntries);
     }
 
     /** Reads the file as UTF-8 and turns the ways that can fail into one exception of our own (Week 10: translate, keep the cause). */
@@ -211,18 +261,22 @@ public class SaveGame {
         if (machine != null) machine.restore(f[1], recipeName, nights);
     }
 
-    /**
-     * A deleted line cannot be pointed at, but save() always writes the entries in the same order,
-     * so we know where the missing one should have been: line 1 is the header, entry number n is on line n + 2.
-     */
-    private void checkNothingIsMissing(Set<String> seen) throws CorruptSaveException {
+    /** Checks required fields in legacy saves, where entries do not have sequence numbers. */
+    private void checkNothingIsMissing(Set<String> seen, boolean version2, int basketEntries) throws CorruptSaveException {
         List<String> inSavedOrder = new ArrayList<>(Arrays.asList("day", "weather", "gold", "earned", "can"));
         for (String crop : CropFactory.NAMES) inSavedOrder.add("seeds " + crop);
         for (int n = 0; n < inSavedOrder.size(); n++) {
             if (!seen.contains(inSavedOrder.get(n))) throw missing(inSavedOrder.get(n), n + 2);
         }
-        // "villager" comes after the basket lines, whose number varies, so there is no line to suggest
-        if (!seen.contains("villager")) throw missing("villager", 0);
+        if (!seen.contains("villager")) {
+            if (version2) throw missing("villager", 7 + CropFactory.NAMES.length + basketEntries);
+            throw missing("villager", 0);
+        }
+    }
+
+    private static String entryText(String line) {
+        String[] parts = line.trim().split(" ", 3);
+        return parts.length == 3 && parts[0].equals("entry") ? parts[2] : line;
     }
 
     private static CorruptSaveException missing(String entry, int expectedLine) {
