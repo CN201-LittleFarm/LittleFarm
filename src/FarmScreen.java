@@ -47,17 +47,18 @@ public class FarmScreen implements Screen {
         return screen;
     }
 
-    public static FarmScreen load(GamePanel game) {
+    public static void load(GamePanel game) {
         FarmScreen screen = new FarmScreen(game);
         try {
             game.getSaveGame().loadInto(screen.farm, screen.farmer, screen.clock);
-            screen.say("Welcome back!");
-        } catch (IOException e) {
-            screen = newGame(game);
-            screen.say("Couldn't read the save (" + e.getMessage() + ") - started a new farm");
+        } catch (FarmException e) {   // CorruptSaveException (names the line) or UnreadableSaveException
+            // Say what is wrong and let the player choose; the damaged file is left alone so it can be fixed
+            game.setScreen(new ConfirmScreen(game, new TitleScreen(game), "The save file is damaged", e.getMessage(),
+                    "New farm", "Back to title", true, () -> newGame(game)));
+            return;
         }
+        screen.say("Welcome back!");
         screen.beginDay();
-        return screen;
     }
 
     public void beginDay() {
