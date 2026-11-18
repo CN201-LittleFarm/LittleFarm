@@ -9,4 +9,5 @@ public interface ProcessingRecipe {
     Map<String, Integer> getRequiredIngredients();
     int getRequiredNights();
     int getSellPrice();
+    boolean hasEnoughIngredients(Bag<String> bag);
 }

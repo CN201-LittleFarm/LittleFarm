@@ -48,4 +48,18 @@ public abstract class BaseRecipe implements ProcessingRecipe {
     public int getSellPrice() {
         return sellPrice;
     }
+
+    @Override 
+    public boolean hasEnoughIngredients(Bag<String> bag) {
+        if (bag == null) {
+            return false;
+        }
+
+        for (Map.Entry<String, Integer> entry : getRequiredIngredients().entrySet()) {
+            if (bag.count(entry.getKey()) < entry.getValue()) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
