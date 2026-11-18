@@ -1,4 +1,4 @@
-public class MachineBusyException extends Exception {
+public class MachineBusyException extends FarmException {
     public MachineBusyException(String message) {
         super(message);
     }
