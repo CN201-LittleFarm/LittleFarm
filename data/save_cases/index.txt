@@ -15,11 +15,13 @@ bad_13_machine_nights_not_number.txt|20|CorruptSaveException
 bad_14_machine_missing_recipe.txt|20|CorruptSaveException
 bad_15_machine_unknown_recipe.txt|20|CorruptSaveException
 bad_16_wrong_header.txt|1|CorruptSaveException
-bad_17_line_deleted_gold.txt|0|CorruptSaveException
+bad_17_line_deleted_gold.txt|4|CorruptSaveException
 bad_18_two_bad_lines_first_is_reported.txt|4|CorruptSaveException
 bad_19_not_a_save_at_all.txt|1|CorruptSaveException
 bad_20_empty_file.txt|0|UnreadableSaveException
 bad_21_not_utf8_text.txt|0|UnreadableSaveException
+bad_22_line_deleted_seeds.txt|8|CorruptSaveException
+bad_23_line_deleted_day.txt|2|CorruptSaveException
 ok_01_blank_lines_between.txt|0|OK
 ok_02_windows_crlf.txt|0|OK
 ok_03_utf8_bom.txt|0|OK

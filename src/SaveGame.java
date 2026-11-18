@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.charset.MalformedInputException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -209,18 +211,21 @@ public class SaveGame {
         if (machine != null) machine.restore(f[1], recipeName, nights);
     }
 
-    /** Deleting a line leaves nothing to point at, so say which entry is gone instead. */
+    /**
+     * A deleted line cannot be pointed at, but save() always writes the entries in the same order,
+     * so we know where the missing one should have been: line 1 is the header, entry number n is on line n + 2.
+     */
     private void checkNothingIsMissing(Set<String> seen) throws CorruptSaveException {
-        String[] required = {"day", "weather", "gold", "earned", "can", "villager"};
-        for (String entry : required) {
-            if (!seen.contains(entry)) throw missing(entry);
+        List<String> inSavedOrder = new ArrayList<>(Arrays.asList("day", "weather", "gold", "earned", "can"));
+        for (String crop : CropFactory.NAMES) inSavedOrder.add("seeds " + crop);
+        for (int n = 0; n < inSavedOrder.size(); n++) {
+            if (!seen.contains(inSavedOrder.get(n))) throw missing(inSavedOrder.get(n), n + 2);
         }
-        for (String crop : CropFactory.NAMES) {
-            if (!seen.contains("seeds " + crop)) throw missing("seeds " + crop);
-        }
+        // "villager" comes after the basket lines, whose number varies, so there is no line to suggest
+        if (!seen.contains("villager")) throw missing("villager", 0);
     }
 
-    private static CorruptSaveException missing(String entry) {
-        return new CorruptSaveException(0, "", "missing entry '" + entry + "' (line deleted?)", null);
+    private static CorruptSaveException missing(String entry, int expectedLine) {
+        return new CorruptSaveException(expectedLine, "", "entry '" + entry + "' is missing", null);
     }
 }
