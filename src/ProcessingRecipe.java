@@ -4,9 +4,9 @@
 import java.util.Map;
 
 public interface ProcessingRecipe {
-    String getProductName();();
+    String getProductName();
     String getCategory();
     Map<String, Integer> getRequiredIngredients();
-    int getRequiredNights();();
-    int getSellPrice();();
+    int getRequiredNights();
+    int getSellPrice();
 }
