@@ -30,6 +30,60 @@ public class FarmScreen implements Screen {
     private boolean warnedLate;
     private String message = "";
 
+    // ---- Processing Machine Integration ----
+
+    private void interactMachine() throws FarmException {
+        ProcessingMachine machine = farm.getProcessingMachine();
+        switch (machine.getState()) {
+            case IDLE:
+                openCakeMenu();
+                break;
+            case PROCESSING:
+                String product = machine.getCurrentRecipe() != null ? machine.getCurrentRecipe().getProductName() : "item";
+                int nights = machine.getRemainingNights();
+                say("Processing " + product + " (" + nights + " nights left)");
+                break;
+            case READY:
+                String finished = machine.collectProduct(farmer.getBasket());
+                floatAtFacing("+1 " + finished, Ui.HIGHLIGHT);
+                say("Collected " + finished + "!");
+                break;
+        }
+    }
+
+    private void openCakeMenu() {
+        game.setScreen(new ConfirmScreen(game, this,
+                "Strawberry Cake (250G)",
+                "3 Strawberry, 2 Potato, 2 Turnip (2 nights)",
+                "Make Cake", "Potato Chips >", false,
+                () -> startRecipe(new CakeRecipe()),
+                this::openChipsMenu));
+    }
+
+    private void openChipsMenu() {
+        game.setScreen(new ConfirmScreen(game, this,
+                "Potato Chips (120G)",
+                "3 Potato, 1 Turnip (1 night)",
+                "Make Potato Chips", "< Back to Cake", false,
+                () -> startRecipe(new ChipsRecipe()),
+                this::openCakeMenu));
+    }
+
+    private void startRecipe(ProcessingRecipe recipe) {
+        try {
+            farm.getProcessingMachine().startProcessing(recipe, farmer.getBasket());
+            floatAtFacing("Started!", Ui.HIGHLIGHT);
+            say("Started making " + recipe.getProductName());
+        } catch (FarmException e) {
+            say(e.getMessage());
+        }
+    }
+
+    private int getItemSellPrice(String itemName) {
+        if ("Strawberry Cake".equals(itemName)) return new CakeRecipe().getSellPrice();
+        if ("Potato Chips".equals(itemName)) return new ChipsRecipe().getSellPrice();
+        return CropFactory.create(itemName).getSellPrice();
+    }
     private FarmScreen(GamePanel game) {
         this.game = game;
 
@@ -118,6 +172,9 @@ public class FarmScreen implements Screen {
                 case BIN:
                     ship();
                     return;
+                case MACHINE:
+                    interactMachine();
+                    return;
                 case POND:
                     farmer.getCan().refill();
                     say("Watering can refilled");
@@ -158,6 +215,12 @@ public class FarmScreen implements Screen {
             case HOUSE: return "Sleep";
             case SHOP:  return "Shop";
             case BIN:   return "Ship basket";
+            case MACHINE:
+                return switch (farm.getProcessingMachine().getState()) {
+                    case IDLE -> "Use machine";
+                    case PROCESSING -> "Check machine";
+                    case READY -> "Collect product";
+                };
             case POND:  return "Refill can";
             default:    break;
         }

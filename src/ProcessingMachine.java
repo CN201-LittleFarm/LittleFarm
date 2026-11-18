@@ -1,54 +1,54 @@
 import java.util.Map;
 
-//private ไว้ไม่ให้ พวกเหลี่ยมแก้ไข state และ recipe ได้โดยตรง
 public class ProcessingMachine {
     private MachineState state;
     private ProcessingRecipe currentRecipe;
     private int remainingNights;
 
-    // Constructor
     public ProcessingMachine() {
-        this.state = MachineState.IDLE; // เริ่มต้นเครื่องจะว่าง
+        this.state = MachineState.IDLE;
         this.currentRecipe = null;
         this.remainingNights = 0;
     }
 
-    // startProcessing method
     public void startProcessing(ProcessingRecipe recipe, Bag<String> bag)
             throws MachineBusyException, InsufficientIngredientException {
-
-        // Don't Repeat if in processing
+        if (recipe == null || bag == null) {
+            throw new IllegalArgumentException("Recipe and bag must not be null");
+        }
+        Map<String, Integer> required = recipe.getRequiredIngredients();
+        if (required == null || required.isEmpty()) {
+            throw new IllegalArgumentException("Recipe must require at least one ingredient");
+        }
         if (state != MachineState.IDLE) {
-            throw new MachineBusyException("เครื่องแปรรูปไม่ว่าง (สถานะ: " + state + ")");
-
+            throw new MachineBusyException("Machine is busy (" + state + ")");
         }
 
-        // Check for sure that the bag has enough ingredients
-        Map<String, Integer> required = recipe.getRequiredIngredients();
+        // Check all ingredients before deducting
         for (Map.Entry<String, Integer> entry : required.entrySet()) {
             String itemName = entry.getKey();
-            int needed = entry.getValue();
-
+            Integer needed = entry.getValue();
+            if (itemName == null || itemName.isBlank() || needed == null || needed <= 0) {
+                throw new IllegalArgumentException("Invalid ingredient requirement in recipe");
+            }
             if (bag.count(itemName) < needed) {
-                throw new InsufficientIngredientException("วัตถุดิบไม่เพียงพอ: ต้องการ " + needed + " ของ " + itemName);
+                throw new InsufficientIngredientException("Not enough " + itemName + " (need " + needed + ")");
             }
         }
 
-        // 3. if Full then remove the ingredients from the bag
+        // Deduct ingredients from bag
         for (Map.Entry<String, Integer> entry : required.entrySet()) {
             bag.remove(entry.getKey(), entry.getValue());
         }
 
-        // 4.Set the state to PROCESSING
         this.currentRecipe = recipe;
         this.remainingNights = recipe.getRequiredNights();
         this.state = (this.remainingNights <= 0) ? MachineState.READY : MachineState.PROCESSING;
     }
 
-    // Decrement the remaining nights method
     public void passNights(int nights) {
         if (state != MachineState.PROCESSING || nights <= 0) {
-            return; // If not processing, do nothing
+            return;
         }
         remainingNights -= nights;
         if (remainingNights <= 0) {
@@ -57,28 +57,41 @@ public class ProcessingMachine {
         }
     }
 
-    // collectProduct method + Getters
     public String collectProduct(Bag<String> bag) throws MachineBusyException {
-        if (state == MachineState.IDLE) {
-            throw new MachineBusyException("เครื่องแปรรูปว่าง ไม่มีสินค้าให้เก็บ");
+        if (bag == null) {
+            throw new IllegalArgumentException("Bag must not be null");
         }
-        if (state == MachineState.PROCESSING) {
-            throw new MachineBusyException("สินค้ายังไม่เสร็จ เหลืออีก " + remainingNights + " คืน");
+        if (state != MachineState.READY || currentRecipe == null) {
+            throw new MachineBusyException("Product is not ready yet (" + state + ")");
         }
 
-        // Add the product to the bag
         String productName = currentRecipe.getProductName();
         bag.add(productName, 1);
 
-        // Reset the machine state(null)
         this.currentRecipe = null;
         this.remainingNights = 0;
         this.state = MachineState.IDLE;
-
         return productName;
     }
 
-    // Getters for UI display
+    public void restoreState(MachineState state, ProcessingRecipe recipe, int remainingNights) {
+        if (state == null) {
+            throw new IllegalArgumentException("Machine state must not be null");
+        }
+        if (state == MachineState.IDLE) {
+            this.state = MachineState.IDLE;
+            this.currentRecipe = null;
+            this.remainingNights = 0;
+        } else {
+            if (recipe == null) {
+                throw new IllegalArgumentException("Active recipe must not be null when machine is not IDLE");
+            }
+            this.state = state;
+            this.currentRecipe = recipe;
+            this.remainingNights = Math.max(0, remainingNights);
+        }
+    }
+
     public MachineState getState() {
         return state;
     }
@@ -90,12 +103,4 @@ public class ProcessingMachine {
     public int getRemainingNights() {
         return remainingNights;
     }
-
-    // Setters for Save/Load State rollback
-    public void restoreState(MachineState state, ProcessingRecipe recipe, int remainingNights) {
-        this.state = state;
-        this.currentRecipe = recipe;
-        this.remainingNights = remainingNights;
-    }
-
 }
