@@ -92,7 +92,7 @@ public class ProcessingMachine {
     }
 
     // Setters for Save/Load State rollback
-    public void restoresState(MachineState state, ProcessingRecipe recipe, int remainingNights) {
+    public void restoreState(MachineState state, ProcessingRecipe recipe, int remainingNights) {
         this.state = state;
         this.currentRecipe = recipe;
         this.remainingNights = remainingNights;

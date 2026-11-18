@@ -14,6 +14,10 @@ public class ProcessingMachineTest {
 
 
     static class MockCakeRecipe implements ProcessingRecipe {
+        @Override
+        public String getCategory() {
+            return "Bakery";
+        }
 
         @Override
         public String getProductName() {
@@ -37,7 +41,13 @@ public class ProcessingMachineTest {
         public int getSellPrice() {
             return 250;
         }
+
+        @Override public boolean hasEnoughIngredients(Bag<String> bag) { 
+            return true;
+        }
     }
+    
+    // Main method to run the tests
     
     public static void main(String[] args) throws Exception {
         System.out.println("=== Start ProcessingMachine Test ===");
@@ -116,10 +126,6 @@ public class ProcessingMachineTest {
         check(machine.getState() == MachineState.IDLE, "9.2 หลังเก็บสินค้าแล้ว สถานะต้องเปลี่ยนเป็น IDLE");
     
         System.out.println("=== ผ่านการทดสอบครบทุกข้อ! ===");
+        
     }
-
-    
-
-}
-
-    
+}    
