@@ -78,6 +78,7 @@ public class SaveGameTest {
         checkTamperedEntry(first, temp.resolve("tampered-seeds.txt"), "seeds Turnip ", "seeds Turnip 999");
         checkDeletedManifest(first, temp.resolve("without-manifest.txt"));
         checkVersion2Compatibility(first, temp.resolve("version-2.txt"));
+        checkRealMachineSaveLoad(temp.resolve("real-machine.txt"));
         check("no .tmp file is left behind", !Files.exists(temp.resolve("first.txt.tmp")));
 
         System.out.println("== damaged files (data/save_cases/index.txt) ==");
@@ -223,6 +224,40 @@ public class SaveGameTest {
         check("version 2 saves remain loadable",
                 g.clock.getDay() == 7 && g.farmer.getGold() == 555
                         && g.farmer.getBasket().count("Potato Chips") == 2);
+    }
+
+    private static void checkRealMachineSaveLoad(Path save) throws Exception {
+        Farm farm = new Farm();
+        Farmer farmer = new Farmer(2, 4, 300);
+        GameClock clock = new GameClock();
+        ProcessingMachine machine = farm.getProcessingMachine();
+        farmer.getBasket().add("Strawberry", 3);
+        farmer.getBasket().add("Potato", 2);
+        farmer.getBasket().add("Turnip", 2);
+        machine.startProcessing(new CakeRecipe(), farmer.getBasket());
+
+        SaveGame saveGame = new SaveGame(save.toString());
+        saveGame.save(farm, farmer, clock, machine);
+
+        Farm loadedFarm = new Farm();
+        Farmer loadedFarmer = new Farmer(2, 4, 300);
+        GameClock loadedClock = new GameClock();
+        ProcessingMachine loadedMachine = loadedFarm.getProcessingMachine();
+        saveGame.loadInto(loadedFarm, loadedFarmer, loadedClock, loadedMachine);
+
+        check("real machine restores its recipe and remaining nights",
+                loadedMachine.getState() == MachineState.PROCESSING
+                        && loadedMachine.getCurrentRecipe().getProductName().equals("Strawberry Cake")
+                        && loadedMachine.getRemainingNights() == 2);
+        check("processing ingredients remain deducted after loading",
+                loadedFarmer.getBasket().count("Strawberry") == 0
+                        && loadedFarmer.getBasket().count("Potato") == 0
+                        && loadedFarmer.getBasket().count("Turnip") == 0);
+
+        loadedMachine.passNights(2);
+        loadedMachine.collectProduct(loadedFarmer.getBasket());
+        check("collecting after loading adds the processed product",
+                loadedFarmer.getBasket().count("Strawberry Cake") == 1);
     }
 
     private static void check(String name, boolean ok) {

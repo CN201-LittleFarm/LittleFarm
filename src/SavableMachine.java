@@ -1,7 +1,6 @@
 /**
  * The only thing SaveGame needs to know about the processing machine.
- * The machine's owner writes a few lines that implement this around ProcessingMachine, so the save code
- * does not have to wait for (or import) the machine code.
+ * The machine implements this small API without exposing its internal fields to the save code.
  *
  * Save line:  machine <STATE> <nightsLeft> <recipe name>      e.g.  machine PROCESSING 2 Strawberry Cake
  *             machine IDLE 0 -                                (an idle machine has no recipe)
