@@ -5,7 +5,8 @@ public enum TileType {
     POND('~', false),
     HOUSE('H', false),
     SHOP('S', false),
-    BIN('B', false);
+    BIN('B', false),
+    MACHINE('M', false);
 
     private final char symbol;      // how the tile is written in Farm's map
     private final boolean walkable;

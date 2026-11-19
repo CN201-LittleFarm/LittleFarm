@@ -21,7 +21,7 @@ public class Farm {
         "#..................#",
         "#..................#",
         "#.............~~~..#",
-        "#.B...........~~~~.#",
+        "#.B.M..........~~~~#",
         "#.............~~~..#",
         "#..................#",
         "####################",
@@ -35,6 +35,7 @@ public class Farm {
 
     private final Tile[][] tiles = new Tile[ROWS][COLS];
     private Villager villager;
+    private final ProcessingMachine processingMachine = new ProcessingMachine(); //
 
     public Farm() {
         for (int r = 0; r < ROWS; r++) {
@@ -49,7 +50,10 @@ public class Farm {
         }
     }
 
+    //
+
     public Villager getVillager() { return villager; }
+    public ProcessingMachine getProcessingMachine() { return processingMachine; }//
 
     /** @return the villager standing on (col, row), or null */
     public Villager villagerAt(int col, int row) {
@@ -86,6 +90,7 @@ public class Farm {
                 if (weather.watersCrops()) tile.soak();
             }
         }
+        processingMachine.passNights(1);
     }
 
     // ---- drawing --------------------------------------------------------------
@@ -94,6 +99,7 @@ public class Farm {
         for (int r = 0; r < ROWS; r++) {
             for (int c = 0; c < COLS; c++) drawTile(g, tiles[r][c], c, r);
         }
+        drawMachine(g, boundsOf(TileType.MACHINE));
         drawHouse(g, boundsOf(TileType.HOUSE));
         drawShop(g, boundsOf(TileType.SHOP));
         drawBin(g, boundsOf(TileType.BIN));
@@ -135,6 +141,18 @@ public class Farm {
             default:   // grass, and the ground under buildings
                 drawGrass(g, x, y, seed);
         }
+    }
+
+    private void drawMachine(Graphics2D g, Rectangle b) {
+        g.setColor(new Color(100, 110, 120));
+        g.fillRect(b.x + 4, b.y + 6, 24, 24);
+        Color light = switch (processingMachine.getState()) {
+            case IDLE -> new Color(80, 200, 120);        // เขียว: ว่าง
+            case PROCESSING -> new Color(240, 150, 40);  // ส้ม: กำลังทำ
+            case READY -> new Color(255, 225, 50);       // เหลือง: พร้อมเก็บ
+        };
+        g.setColor(light);
+        g.fillRect(b.x + 8, b.y + 9, 16, 5);
     }
 
     private void drawGrass(Graphics2D g, int x, int y, int seed) {

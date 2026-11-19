@@ -8,12 +8,13 @@ public class ConfirmScreen implements Screen {
     private final String question, detail;
     private final Menu menu = new Menu();
 
-    /**
-     * @param noFirst start with the "no" answer highlighted, for choices that are hard to undo
-     * @param onYes runs after going back to `previous`, so it may move on to another screen itself
-     */
     public ConfirmScreen(GamePanel game, Screen previous, String question, String detail,
                          String yesLabel, String noLabel, boolean noFirst, Runnable onYes) {
+        this(game, previous, question, detail, yesLabel, noLabel, noFirst, onYes, () -> {});
+    }
+
+    public ConfirmScreen(GamePanel game, Screen previous, String question, String detail,
+                         String yesLabel, String noLabel, boolean noFirst, Runnable onYes, Runnable onNo) {
         this.game = game;
         this.previous = previous;
         this.question = question;
@@ -22,7 +23,10 @@ public class ConfirmScreen implements Screen {
             game.setScreen(previous);
             onYes.run();
         });
-        menu.add(noLabel, () -> game.setScreen(previous));
+        menu.add(noLabel, () -> {
+            game.setScreen(previous);
+            onNo.run();
+        });
         if (noFirst) menu.select(1);
     }
 
