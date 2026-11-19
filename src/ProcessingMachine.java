@@ -1,6 +1,6 @@
 import java.util.Map;
 
-public class ProcessingMachine {
+public class ProcessingMachine implements SavableMachine {
     private MachineState state;
     private ProcessingRecipe currentRecipe;
     private int remainingNights;
@@ -102,5 +102,63 @@ public class ProcessingMachine {
 
     public int getRemainingNights() {
         return remainingNights;
+    }
+
+    @Override
+    public String getSavedState() {
+        return state.name();
+    }
+
+    @Override
+    public String getSavedRecipeName() {
+        return currentRecipe == null ? "-" : currentRecipe.getProductName();
+    }
+
+    @Override
+    public int getSavedNights() {
+        return remainingNights;
+    }
+
+    @Override
+    public void restore(String savedState, String recipeName, int nights) throws FarmException {
+        MachineState restoredState;
+        try {
+            restoredState = MachineState.valueOf(savedState);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("unknown machine state '" + savedState + "'", e);
+        }
+
+        if (nights < 0) {
+            throw new IllegalArgumentException("must not be negative");
+        }
+
+        ProcessingRecipe recipe;
+        switch (recipeName) {
+            case "-":
+                recipe = null;
+                break;
+            case "Strawberry Cake":
+                recipe = new CakeRecipe();
+                break;
+            case "Potato Chips":
+                recipe = new ChipsRecipe();
+                break;
+            default:
+                throw new FarmException("unknown recipe '" + recipeName + "'");
+        }
+
+        if (restoredState == MachineState.IDLE) {
+            if (recipe != null || nights != 0) {
+                throw new FarmException("idle machine must not have a recipe or remaining nights");
+            }
+        } else if (recipe == null) {
+            throw new FarmException("machine recipe is missing");
+        } else if (restoredState == MachineState.PROCESSING && nights == 0) {
+            throw new FarmException("processing machine must have remaining nights");
+        } else if (restoredState == MachineState.READY && nights != 0) {
+            throw new FarmException("ready machine must have zero remaining nights");
+        }
+
+        restoreState(restoredState, recipe, nights);
     }
 }

@@ -32,12 +32,14 @@ public class FarmScreen implements Screen {
 
     // ---- Processing Machine Integration ----
 
-    private void autoSave() {
+    private boolean autoSave() {
+        if (isMonthOver()) return true;
         try {
-            if (!isMonthOver()) {
-                game.getSaveGame().save(farm, farmer, clock);
-            }
-        } catch (IOException ignored) {
+            game.getSaveGame().save(farm, farmer, clock, farm.getProcessingMachine());
+            return true;
+        } catch (IOException e) {
+            say("Couldn't save: " + e.getMessage());
+            return false;
         }
     }
 
@@ -55,9 +57,9 @@ public class FarmScreen implements Screen {
                 break;
             case READY:
                 String finished = machine.collectProduct(farmer.getBasket());
-                autoSave();
+                boolean saved = autoSave();
                 floatAtFacing("+1 " + finished, Ui.HIGHLIGHT);
-                say("Collected " + finished + "!");
+                if (saved) say("Collected " + finished + "!");
                 break;
         }
     }
@@ -85,9 +87,10 @@ public class FarmScreen implements Screen {
     private void startRecipe(ProcessingRecipe recipe) {
         try {
             farm.getProcessingMachine().startProcessing(recipe, farmer.getBasket());
-            autoSave();
-            floatAtFacing("Started!", Ui.HIGHLIGHT);
-            say("Started making " + recipe.getProductName());
+            if (autoSave()) {
+                floatAtFacing("Started!", Ui.HIGHLIGHT);
+                say("Started making " + recipe.getProductName());
+            }
         } catch (FarmException e) {
             say(e.getMessage());
         }
@@ -118,7 +121,8 @@ public class FarmScreen implements Screen {
     public static void load(GamePanel game) {
         FarmScreen screen = new FarmScreen(game);
         try {
-            game.getSaveGame().loadInto(screen.farm, screen.farmer, screen.clock);
+            game.getSaveGame().loadInto(screen.farm, screen.farmer, screen.clock,
+                    screen.farm.getProcessingMachine());
         } catch (FarmException e) {   // CorruptSaveException (names the line) or UnreadableSaveException
             // Say what is wrong and let the player choose; the damaged file is left alone so it can be fixed
             game.setScreen(new ConfirmScreen(game, new TitleScreen(game), "The save file is damaged", e.getMessage(),
@@ -332,7 +336,8 @@ public class FarmScreen implements Screen {
             if (isMonthOver())
                 game.getSaveGame().delete();
             else
-                game.getSaveGame().save(farm, farmer, clock);
+                game.getSaveGame().save(farm, farmer, clock,
+                        farm.getProcessingMachine());
         } catch (IOException e) {
             lines.add("Couldn't save: " + e.getMessage());
         }

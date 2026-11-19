@@ -51,7 +51,7 @@ public class RecipeTest {
                 cake.getRequiredNights() == 2);
 
         check("Cake: ราคาขาย",
-                cake.getSellPrice() == 250);
+                cake.getSellPrice() == 1070);
 
         check("Cake: จำนวนวัตถุดิบที่ต้องใช้",
                 cake.getRequiredIngredients().equals(
@@ -74,7 +74,7 @@ public class RecipeTest {
                 chips.getRequiredNights() == 1);
 
         check("Chips: ราคาขาย",
-                chips.getSellPrice() == 120);
+                chips.getSellPrice() == 640);
 
         check("Chips: จำนวนวัตถุดิบที่ต้องใช้",
                 chips.getRequiredIngredients().equals(
