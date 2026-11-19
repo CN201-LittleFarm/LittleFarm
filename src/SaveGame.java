@@ -16,19 +16,18 @@ import java.util.Set;
 
 /**
  * Saves the farm as plain text you can open and read, e.g.
+ *   little-farm save 3 records 3
+ *   manifest day|villager|soil (5,6)
  *   entry 1 day 4
- *   entry 2 weather RAINY
- *   entry 3 gold 380
- *   entry 4 seeds Turnip 2
- *   entry 5 request Turnip 3 360 4     (crop amount reward daysLeft)
- *   entry 6 soil 5 6 Turnip 1 wet      (col row crop daysGrown wet/dry; "-" for an empty plot)
- *   entry 7 machine PROCESSING 2 Strawberry Cake
+ *   entry 2 villager 0 0
+ *   entry 3 soil 5 6 Turnip 1 wet
  *
  * A damaged file never crashes the game: loadInto refuses it with an exception that names the line.
  */
 public class SaveGame {
     private static final String LEGACY_HEADER = "little-farm save 1";
-    private static final String HEADER_PREFIX = "little-farm save 2";
+    private static final String VERSION_2_HEADER = "little-farm save 2";
+    private static final String VERSION_3_HEADER = "little-farm save 3";
     private final Path file;
 
     public SaveGame(String fileName) {
@@ -96,11 +95,14 @@ public class SaveGame {
         if (machine != null) {
             entries.add("machine " + machine.getSavedState() + " " + machine.getSavedNights() + " " + machine.getSavedRecipeName());
         }
+        List<String> manifest = new ArrayList<>();
+        for (String entry : entries) manifest.add(entryDescription(entry));
 
         // write to a temporary file first: a crash half-way must not destroy the good save (Week 11)
         Path temp = file.resolveSibling(file.getFileName() + ".tmp");
         try (PrintWriter out = new PrintWriter(Files.newBufferedWriter(temp, StandardCharsets.UTF_8))) {
-            out.println(HEADER_PREFIX + " records " + entries.size());
+            out.println(VERSION_3_HEADER + " records " + entries.size());
+            out.println("manifest " + String.join("|", manifest));
             for (int i = 0; i < entries.size(); i++) {
                 out.println("entry " + (i + 1) + " " + entries.get(i));
             }
@@ -125,29 +127,46 @@ public class SaveGame {
             throws UnreadableSaveException, CorruptSaveException {
         List<String> lines = readLines();
         String header = lines.get(0).replace("﻿", "").trim();   // ﻿: the invisible mark some editors add
-        boolean version2 = header.startsWith(HEADER_PREFIX + " ");
+        int version;
         int expectedEntries = -1;
-        if (version2) {
+        if (header.equals(LEGACY_HEADER)) {
+            version = 1;
+        } else {
             String[] headerParts = header.split(" ");
+            if (headerParts.length < 3 || !headerParts[0].equals("little-farm") || !headerParts[1].equals("save")) {
+                throw new CorruptSaveException(1, lines.get(0), "this is not a Little Farm save", null);
+            }
             try {
                 if (headerParts.length != 5 || !headerParts[3].equals("records")) {
                     throw new IllegalArgumentException("invalid save header");
                 }
+                version = Integer.parseInt(headerParts[2]);
+                if (version != 2 && version != 3) throw new IllegalArgumentException("unsupported save version");
                 expectedEntries = count(headerParts[4]);
             } catch (IllegalArgumentException e) {
                 throw new CorruptSaveException(1, lines.get(0), "invalid save header", e);
             }
-        } else if (!header.equals(LEGACY_HEADER)) {
-            throw new CorruptSaveException(1, lines.get(0), "this is not a Little Farm save", null);
+        }
+
+        String[] expectedDescriptions = null;
+        if (version == 3) {
+            if (lines.size() < 2 || !lines.get(1).startsWith("manifest ")) {
+                throw new CorruptSaveException(2, lines.size() < 2 ? "" : lines.get(1), "save manifest is missing", null);
+            }
+            expectedDescriptions = lines.get(1).substring("manifest ".length()).split("\\|", -1);
+            if (expectedDescriptions.length != expectedEntries) {
+                throw new CorruptSaveException(2, lines.get(1), "manifest does not match the record count", null);
+            }
         }
 
         Set<String> seen = new HashSet<>();   // which entries the file had, to notice a deleted line
         int expectedEntryNumber = 1;
         int basketEntries = 0;
-        for (int i = 1; i < lines.size(); i++) {
+        int firstEntryLine = version == 3 ? 3 : 2;
+        for (int i = firstEntryLine - 1; i < lines.size(); i++) {
             String line = lines.get(i);
             String entryLine = line;
-            if (version2) {
+            if (version >= 2) {
                 String[] numbered = line.trim().split(" ", 3);
                 if (numbered.length != 3 || !numbered[0].equals("entry")) {
                     throw new CorruptSaveException(i + 1, line, "expected numbered save entry " + expectedEntryNumber, null);
@@ -159,13 +178,17 @@ public class SaveGame {
                     throw new CorruptSaveException(i + 1, line, "a save entry number was expected", e);
                 }
                 if (entryNumber != expectedEntryNumber) {
-                    throw missing("save entry " + expectedEntryNumber, expectedEntryNumber + 1);
+                    throw missingEntry(expectedEntryNumber, version, expectedDescriptions);
                 }
                 if (expectedEntryNumber > expectedEntries) {
                     throw new CorruptSaveException(i + 1, line, "there are more entries than the header says", null);
                 }
                 expectedEntryNumber++;
                 entryLine = numbered[2];
+                if (version == 3 && !expectedDescriptions[entryNumber - 1].equals(entryDescription(entryLine))) {
+                    throw new CorruptSaveException(i + 1, line,
+                            "expected " + expectedDescriptions[entryNumber - 1] + " but found " + entryDescription(entryLine), null);
+                }
             }
             String[] parts = entryLine.trim().split(" ");
             try {
@@ -204,10 +227,10 @@ public class SaveGame {
                 throw new CorruptSaveException(i + 1, line, e.getMessage(), e);
             }
         }
-        if (version2 && expectedEntryNumber <= expectedEntries) {
-            throw missing("save entry " + expectedEntryNumber, expectedEntryNumber + 1);
+        if (version >= 2 && expectedEntryNumber <= expectedEntries) {
+            throw missingEntry(expectedEntryNumber, version, expectedDescriptions);
         }
-        checkNothingIsMissing(seen, version2, basketEntries);
+        checkNothingIsMissing(seen, version >= 2, basketEntries);
     }
 
     /** Reads the file as UTF-8 and turns the ways that can fail into one exception of our own (Week 10: translate, keep the cause). */
@@ -277,6 +300,21 @@ public class SaveGame {
     private static String entryText(String line) {
         String[] parts = line.trim().split(" ", 3);
         return parts.length == 3 && parts[0].equals("entry") ? parts[2] : line;
+    }
+
+    private static String entryDescription(String entry) {
+        String[] parts = entry.trim().split(" ");
+        switch (parts[0]) {
+            case "seeds": return parts.length > 1 ? "seeds " + parts[1] : "seeds";
+            case "soil": return parts.length > 2 ? "soil (" + parts[1] + "," + parts[2] + ")" : "soil";
+            case "basket": return "basket item";
+            default: return parts[0];
+        }
+    }
+
+    private static CorruptSaveException missingEntry(int entryNumber, int version, String[] descriptions) {
+        String description = version == 3 ? descriptions[entryNumber - 1] : "save entry " + entryNumber;
+        return missing(description, entryNumber + (version == 3 ? 2 : 1));
     }
 
     private static CorruptSaveException missing(String entry, int expectedLine) {

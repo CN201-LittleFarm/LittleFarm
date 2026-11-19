@@ -73,6 +73,8 @@ public class SaveGameTest {
         checkDeletedEntry(first, temp.resolve("without-soil.txt"), "soil");
         checkDeletedEntry(first, temp.resolve("without-villager.txt"), "villager");
         checkDeletedEntry(first, temp.resolve("without-last-entry.txt"), "machine");
+        checkDeletedManifest(first, temp.resolve("without-manifest.txt"));
+        checkVersion2Compatibility(first, temp.resolve("version-2.txt"));
         check("no .tmp file is left behind", !Files.exists(temp.resolve("first.txt.tmp")));
 
         System.out.println("== damaged files (data/save_cases/index.txt) ==");
@@ -123,7 +125,12 @@ public class SaveGameTest {
             String[] parts = lines.get(i).split(" ", 3);
             if (parts.length != 3 || !parts[0].equals("entry") || !parts[2].startsWith(entryName + " ")) continue;
 
-            int expectedLine = Integer.parseInt(parts[1]) + 1;
+            int expectedLine = Integer.parseInt(parts[1]) + 2;
+            String expectedDescription = entryName;
+            if (entryName.equals("soil")) {
+                String[] soil = parts[2].split(" ");
+                expectedDescription = "soil (" + soil[1] + "," + soil[2] + ")";
+            }
             lines.remove(i);
             Files.write(damagedSave, lines, java.nio.charset.StandardCharsets.UTF_8);
             Game g = new Game();
@@ -131,12 +138,39 @@ public class SaveGameTest {
                 new SaveGame(damagedSave.toString()).loadInto(g.farm, g.farmer, g.clock, g.machine);
                 check("deleting " + entryName + " is rejected", false);
             } catch (CorruptSaveException e) {
-                check("deleting " + entryName + " reports the missing line",
-                        e.getLineNumber() == expectedLine);
+                check("deleting " + entryName + " reports its type and missing line",
+                        e.getLineNumber() == expectedLine && e.getMessage().contains(expectedDescription));
             }
             return;
         }
         check("test save contains a " + entryName + " entry", false);
+    }
+
+    private static void checkDeletedManifest(Path save, Path damagedSave) throws Exception {
+        List<String> lines = new ArrayList<>(Files.readAllLines(save));
+        lines.remove(1);
+        Files.write(damagedSave, lines, java.nio.charset.StandardCharsets.UTF_8);
+        Game g = new Game();
+        try {
+            new SaveGame(damagedSave.toString()).loadInto(g.farm, g.farmer, g.clock, g.machine);
+            check("deleting the manifest is rejected", false);
+        } catch (CorruptSaveException e) {
+            check("deleting the manifest reports line 2 and its name",
+                    e.getLineNumber() == 2 && e.getMessage().contains("manifest"));
+        }
+    }
+
+    private static void checkVersion2Compatibility(Path save, Path version2Save) throws Exception {
+        List<String> lines = new ArrayList<>(Files.readAllLines(save));
+        String[] header = lines.get(0).split(" ");
+        lines.set(0, "little-farm save 2 records " + header[4]);
+        lines.remove(1);
+        Files.write(version2Save, lines, java.nio.charset.StandardCharsets.UTF_8);
+        Game g = new Game();
+        new SaveGame(version2Save.toString()).loadInto(g.farm, g.farmer, g.clock, g.machine);
+        check("version 2 saves remain loadable",
+                g.clock.getDay() == 7 && g.farmer.getGold() == 555
+                        && g.farmer.getBasket().count("Potato Chips") == 2);
     }
 
     private static void check(String name, boolean ok) {
