@@ -63,8 +63,9 @@ public class FarmScreen implements Screen {
     }
 
     private void openCakeMenu() {
+        int price = new CakeRecipe().getSellPrice();
         game.setScreen(new ConfirmScreen(game, this,
-                "Strawberry Cake (900G)",
+                "Strawberry Cake (" + price + "G)",
                 "3 Strawberry, 2 Potato, 2 Turnip (2 nights)",
                 "Make Cake", "Potato Chips >", false,
                 () -> startRecipe(new CakeRecipe()),
@@ -72,8 +73,9 @@ public class FarmScreen implements Screen {
     }
 
     private void openChipsMenu() {
+        int price = new ChipsRecipe().getSellPrice();
         game.setScreen(new ConfirmScreen(game, this,
-                "Potato Chips (600G)",
+                "Potato Chips (" + price + "G)",
                 "3 Potato, 1 Turnip (1 night)",
                 "Make Potato Chips", "< Back to Cake", false,
                 () -> startRecipe(new ChipsRecipe()),
