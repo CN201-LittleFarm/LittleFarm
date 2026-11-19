@@ -3,18 +3,10 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Saves the farm as plain text you can open and read, e.g.
- *   day 4
- *   weather RAINY
- *   gold 380
- *   seeds Turnip 2
- *   request Turnip 3 360 4     (crop amount reward daysLeft)
- *   soil 5 6 Turnip 1 wet      (col row crop daysGrown wet/dry; "-" for an empty plot)
- */
 public class SaveGame {
     private static final String HEADER = "little-farm save 1";
     private final Path file;
@@ -27,7 +19,6 @@ public class SaveGame {
         return Files.exists(file);
     }
 
-    /** A one-line description for the title menu, e.g. "Day 5, 780G", or null if there is no save. */
     public String describe() {
         if (!exists()) return null;
         String day = "?", gold = "?";
@@ -65,6 +56,10 @@ public class SaveGame {
                 out.println("request " + request.getCropName() + " " + request.getAmount() + " "
                         + request.getReward() + " " + request.getDaysLeft());
             }
+            ProcessingMachine machine = farm.getProcessingMachine();
+            String recipeName = machine.getCurrentRecipe() != null ? machine.getCurrentRecipe().getProductName() : "NONE";
+            out.println("machine " + machine.getState().name() + " " + machine.getRemainingNights() + " " + recipeName);
+
             for (int r = 0; r < Farm.ROWS; r++) {
                 for (int c = 0; c < Farm.COLS; c++) {
                     Tile tile = farm.tileAt(c, r);
@@ -77,7 +72,6 @@ public class SaveGame {
         }
     }
 
-    /** Fills a brand-new farm, farmer and clock from the file. */
     public void loadInto(Farm farm, Farmer farmer, GameClock clock) throws IOException {
         List<String> lines = Files.readAllLines(file);
         if (lines.isEmpty() || !lines.get(0).equals(HEADER)) throw new IOException("not a Little Farm save file");
@@ -99,13 +93,29 @@ public class SaveGame {
                         break;
                     case "can":    farmer.getCan().setWater(Integer.parseInt(parts[1])); break;
                     case "seeds":  farmer.getSeedBag(parts[1]).setSeeds(Integer.parseInt(parts[2])); break;
-                    case "basket": farmer.getBasket().add(parts[1], Integer.parseInt(parts[2])); break;
+                    case "basket": {
+                        int amount = Integer.parseInt(parts[parts.length - 1]);
+                        String itemName = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length - 1));
+                        farmer.getBasket().add(itemName, amount);
+                        break;
+                    }
+                    case "machine": {
+                        MachineState state = MachineState.valueOf(parts[1]);
+                        int nights = Integer.parseInt(parts[2]);
+                        String recipeName = String.join(" ", Arrays.copyOfRange(parts, 3, parts.length));
+                        ProcessingRecipe recipe = switch (recipeName) {
+                            case "Strawberry Cake" -> new CakeRecipe();
+                            case "Potato Chips" -> new ChipsRecipe();
+                            default -> null;
+                        };
+                        farm.getProcessingMachine().restoreState(state, recipe, nights);
+                        break;
+                    }
                     case "soil":   loadSoil(farm, parts); break;
-                    case "":       break;   // blank line
+                    case "":       break;
                     default:       throw new IOException("line " + (i + 1) + ": unknown entry '" + parts[0] + "'");
                 }
             } catch (IllegalArgumentException | IndexOutOfBoundsException | FarmException e) {
-                // NumberFormatException is an IllegalArgumentException, so a bad number lands here too
                 throw new IOException("line " + (i + 1) + " is damaged: " + lines.get(i), e);
             }
         }
