@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.charset.MalformedInputException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -16,8 +18,9 @@ import java.util.Set;
 
 /**
  * Saves the farm as plain text you can open and read, e.g.
- *   little-farm save 3 records 3
+ *   little-farm save 4 records 3
  *   manifest day|villager|soil (5,6)
+ *   checksums <one SHA-256 checksum for each entry>
  *   entry 1 day 4
  *   entry 2 villager 0 0
  *   entry 3 soil 5 6 Turnip 1 wet
@@ -28,6 +31,7 @@ public class SaveGame {
     private static final String LEGACY_HEADER = "little-farm save 1";
     private static final String VERSION_2_HEADER = "little-farm save 2";
     private static final String VERSION_3_HEADER = "little-farm save 3";
+    private static final String VERSION_4_HEADER = "little-farm save 4";
     private final Path file;
 
     public SaveGame(String fileName) {
@@ -97,12 +101,15 @@ public class SaveGame {
         }
         List<String> manifest = new ArrayList<>();
         for (String entry : entries) manifest.add(entryDescription(entry));
+        List<String> checksums = new ArrayList<>();
+        for (String entry : entries) checksums.add(checksum(entry));
 
         // write to a temporary file first: a crash half-way must not destroy the good save (Week 11)
         Path temp = file.resolveSibling(file.getFileName() + ".tmp");
         try (PrintWriter out = new PrintWriter(Files.newBufferedWriter(temp, StandardCharsets.UTF_8))) {
-            out.println(VERSION_3_HEADER + " records " + entries.size());
+            out.println(VERSION_4_HEADER + " records " + entries.size());
             out.println("manifest " + String.join("|", manifest));
+            out.println("checksums " + String.join("|", checksums));
             for (int i = 0; i < entries.size(); i++) {
                 out.println("entry " + (i + 1) + " " + entries.get(i));
             }
@@ -141,7 +148,7 @@ public class SaveGame {
                     throw new IllegalArgumentException("invalid save header");
                 }
                 version = Integer.parseInt(headerParts[2]);
-                if (version != 2 && version != 3) throw new IllegalArgumentException("unsupported save version");
+                if (version != 2 && version != 3 && version != 4) throw new IllegalArgumentException("unsupported save version");
                 expectedEntries = count(headerParts[4]);
             } catch (IllegalArgumentException e) {
                 throw new CorruptSaveException(1, lines.get(0), "invalid save header", e);
@@ -149,7 +156,7 @@ public class SaveGame {
         }
 
         String[] expectedDescriptions = null;
-        if (version == 3) {
+        if (version >= 3) {
             if (lines.size() < 2 || !lines.get(1).startsWith("manifest ")) {
                 throw new CorruptSaveException(2, lines.size() < 2 ? "" : lines.get(1), "save manifest is missing", null);
             }
@@ -158,11 +165,26 @@ public class SaveGame {
                 throw new CorruptSaveException(2, lines.get(1), "manifest does not match the record count", null);
             }
         }
+        String[] expectedChecksums = null;
+        if (version == 4) {
+            if (lines.size() < 3 || !lines.get(2).startsWith("checksums ")) {
+                throw new CorruptSaveException(3, lines.size() < 3 ? "" : lines.get(2), "save checksums are missing", null);
+            }
+            expectedChecksums = lines.get(2).substring("checksums ".length()).split("\\|", -1);
+            if (expectedChecksums.length != expectedEntries) {
+                throw new CorruptSaveException(3, lines.get(2), "checksums do not match the record count", null);
+            }
+            for (String value : expectedChecksums) {
+                if (!value.matches("[0-9a-f]{64}")) {
+                    throw new CorruptSaveException(3, lines.get(2), "invalid save checksum", null);
+                }
+            }
+        }
 
         Set<String> seen = new HashSet<>();   // which entries the file had, to notice a deleted line
         int expectedEntryNumber = 1;
         int basketEntries = 0;
-        int firstEntryLine = version == 3 ? 3 : 2;
+        int firstEntryLine = version == 4 ? 4 : version == 3 ? 3 : 2;
         for (int i = firstEntryLine - 1; i < lines.size(); i++) {
             String line = lines.get(i);
             String entryLine = line;
@@ -188,7 +210,11 @@ public class SaveGame {
                 }
                 expectedEntryNumber++;
                 entryLine = numbered[2];
-                if (version == 3 && !expectedDescriptions[entryNumber - 1].equals(entryDescription(entryLine))) {
+                if (version == 4 && !expectedChecksums[entryNumber - 1].equals(checksum(entryLine))) {
+                    throw new CorruptSaveException(i + 1, line,
+                            "entry '" + expectedDescriptions[entryNumber - 1] + "' was changed (checksum does not match)", null);
+                }
+                if (version >= 3 && !expectedDescriptions[entryNumber - 1].equals(entryDescription(entryLine))) {
                     throw new CorruptSaveException(i + 1, line,
                             "expected " + expectedDescriptions[entryNumber - 1] + " but found " + entryDescription(entryLine), null);
                 }
@@ -259,6 +285,17 @@ public class SaveGame {
         return number;
     }
 
+    private static String checksum(String entry) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(entry.getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder(digest.length * 2);
+            for (byte value : digest) result.append(String.format("%02x", value & 0xff));
+            return result.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
+    }
+
     private void loadSoil(Farm farm, String[] parts) throws FarmException {
         Tile tile = farm.tileAt(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
         if (tile == null) throw new FarmException("soil is off the map");
@@ -316,8 +353,9 @@ public class SaveGame {
     }
 
     private static CorruptSaveException missingEntry(int entryNumber, int version, String[] descriptions) {
-        String description = version == 3 ? descriptions[entryNumber - 1] : "save entry " + entryNumber;
-        return missing(description, entryNumber + (version == 3 ? 2 : 1));
+        String description = version >= 3 ? descriptions[entryNumber - 1] : "save entry " + entryNumber;
+        int lineOffset = version == 4 ? 3 : version == 3 ? 2 : 1;
+        return missing(description, entryNumber + lineOffset);
     }
 
     private static CorruptSaveException missing(String entry, int expectedLine) {

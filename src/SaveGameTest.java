@@ -74,6 +74,8 @@ public class SaveGameTest {
         checkBlankDeletedEntry(first, temp.resolve("blank-soil.txt"), "soil");
         checkDeletedEntry(first, temp.resolve("without-villager.txt"), "villager");
         checkDeletedEntry(first, temp.resolve("without-last-entry.txt"), "machine");
+        checkTamperedEntry(first, temp.resolve("tampered-gold.txt"), "gold ", "gold 999999");
+        checkTamperedEntry(first, temp.resolve("tampered-seeds.txt"), "seeds Turnip ", "seeds Turnip 999");
         checkDeletedManifest(first, temp.resolve("without-manifest.txt"));
         checkVersion2Compatibility(first, temp.resolve("version-2.txt"));
         check("no .tmp file is left behind", !Files.exists(temp.resolve("first.txt.tmp")));
@@ -126,7 +128,7 @@ public class SaveGameTest {
             String[] parts = lines.get(i).split(" ", 3);
             if (parts.length != 3 || !parts[0].equals("entry") || !parts[2].startsWith(entryName + " ")) continue;
 
-            int expectedLine = Integer.parseInt(parts[1]) + 2;
+            int expectedLine = Integer.parseInt(parts[1]) + 3;
             String expectedDescription = entryName;
             if (entryName.equals("soil")) {
                 String[] soil = parts[2].split(" ");
@@ -167,7 +169,7 @@ public class SaveGameTest {
             String[] parts = lines.get(i).split(" ", 3);
             if (parts.length != 3 || !parts[0].equals("entry") || !parts[2].startsWith(entryName + " ")) continue;
 
-            int expectedLine = Integer.parseInt(parts[1]) + 2;
+            int expectedLine = Integer.parseInt(parts[1]) + 3;
             String[] payload = parts[2].split(" ");
             String expectedDescription = entryName.equals("soil")
                     ? "soil (" + payload[1] + "," + payload[2] + ")" : entryName;
@@ -186,10 +188,34 @@ public class SaveGameTest {
         check("test save contains a " + entryName + " entry to blank", false);
     }
 
+    private static void checkTamperedEntry(Path save, Path damagedSave, String entryPrefix, String replacement) throws Exception {
+        List<String> lines = new ArrayList<>(Files.readAllLines(save));
+        for (int i = 1; i < lines.size(); i++) {
+            String[] parts = lines.get(i).split(" ", 3);
+            if (parts.length != 3 || !parts[0].equals("entry") || !parts[2].startsWith(entryPrefix)) continue;
+
+            String entryName = entryPrefix.trim();
+            lines.set(i, parts[0] + " " + parts[1] + " " + replacement);
+            Files.write(damagedSave, lines, java.nio.charset.StandardCharsets.UTF_8);
+            Game g = new Game();
+            try {
+                new SaveGame(damagedSave.toString()).loadInto(g.farm, g.farmer, g.clock, g.machine);
+                check("changing " + entryName + " is rejected", false);
+            } catch (CorruptSaveException e) {
+                check("changing " + entryName + " reports its line and type",
+                        e.getLineNumber() == i + 1 && e.getMessage().contains(entryName)
+                                && e.getMessage().contains("checksum does not match"));
+            }
+            return;
+        }
+        check("test save contains a " + entryPrefix.trim() + " entry to change", false);
+    }
+
     private static void checkVersion2Compatibility(Path save, Path version2Save) throws Exception {
         List<String> lines = new ArrayList<>(Files.readAllLines(save));
         String[] header = lines.get(0).split(" ");
         lines.set(0, "little-farm save 2 records " + header[4]);
+        lines.remove(1);
         lines.remove(1);
         Files.write(version2Save, lines, java.nio.charset.StandardCharsets.UTF_8);
         Game g = new Game();
