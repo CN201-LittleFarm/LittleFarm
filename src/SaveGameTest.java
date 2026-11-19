@@ -71,6 +71,7 @@ public class SaveGameTest {
         check("the title menu can describe the new save format",
                 "Day 7, 555G".equals(new SaveGame(first.toString()).describe()));
         checkDeletedEntry(first, temp.resolve("without-soil.txt"), "soil");
+        checkBlankDeletedEntry(first, temp.resolve("blank-soil.txt"), "soil");
         checkDeletedEntry(first, temp.resolve("without-villager.txt"), "villager");
         checkDeletedEntry(first, temp.resolve("without-last-entry.txt"), "machine");
         checkDeletedManifest(first, temp.resolve("without-manifest.txt"));
@@ -158,6 +159,31 @@ public class SaveGameTest {
             check("deleting the manifest reports line 2 and its name",
                     e.getLineNumber() == 2 && e.getMessage().contains("manifest"));
         }
+    }
+
+    private static void checkBlankDeletedEntry(Path save, Path damagedSave, String entryName) throws Exception {
+        List<String> lines = new ArrayList<>(Files.readAllLines(save));
+        for (int i = 1; i < lines.size(); i++) {
+            String[] parts = lines.get(i).split(" ", 3);
+            if (parts.length != 3 || !parts[0].equals("entry") || !parts[2].startsWith(entryName + " ")) continue;
+
+            int expectedLine = Integer.parseInt(parts[1]) + 2;
+            String[] payload = parts[2].split(" ");
+            String expectedDescription = entryName.equals("soil")
+                    ? "soil (" + payload[1] + "," + payload[2] + ")" : entryName;
+            lines.set(i, "");
+            Files.write(damagedSave, lines, java.nio.charset.StandardCharsets.UTF_8);
+            Game g = new Game();
+            try {
+                new SaveGame(damagedSave.toString()).loadInto(g.farm, g.farmer, g.clock, g.machine);
+                check("blanking " + entryName + " is rejected", false);
+            } catch (CorruptSaveException e) {
+                check("blanking " + entryName + " reports its type and line",
+                        e.getLineNumber() == expectedLine && e.getMessage().contains(expectedDescription));
+            }
+            return;
+        }
+        check("test save contains a " + entryName + " entry to blank", false);
     }
 
     private static void checkVersion2Compatibility(Path save, Path version2Save) throws Exception {

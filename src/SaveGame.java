@@ -167,6 +167,9 @@ public class SaveGame {
             String line = lines.get(i);
             String entryLine = line;
             if (version >= 2) {
+                if (line.trim().isEmpty()) {
+                    throw missingEntry(expectedEntryNumber, version, expectedDescriptions);
+                }
                 String[] numbered = line.trim().split(" ", 3);
                 if (numbered.length != 3 || !numbered[0].equals("entry")) {
                     throw new CorruptSaveException(i + 1, line, "expected numbered save entry " + expectedEntryNumber, null);
