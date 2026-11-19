@@ -1,0 +1,27 @@
+# file|line the player is told (0 = no single line)|exception expected (OK = loads fine)
+bad_01_unknown_keyword.txt|4|CorruptSaveException
+bad_02_gold_not_a_number.txt|4|CorruptSaveException
+bad_03_gold_negative.txt|4|CorruptSaveException
+bad_04_weather_unknown.txt|3|CorruptSaveException
+bad_05_seeds_unknown_crop.txt|8|CorruptSaveException
+bad_06_seeds_missing_value.txt|8|CorruptSaveException
+bad_07_basket_missing_amount.txt|11|CorruptSaveException
+bad_08_soil_off_map.txt|15|CorruptSaveException
+bad_09_soil_on_fence.txt|15|CorruptSaveException
+bad_10_soil_not_wet_or_dry.txt|16|CorruptSaveException
+bad_11_request_zero_amount.txt|14|CorruptSaveException
+bad_12_machine_bad_state.txt|20|CorruptSaveException
+bad_13_machine_nights_not_number.txt|20|CorruptSaveException
+bad_14_machine_missing_recipe.txt|20|CorruptSaveException
+bad_15_machine_unknown_recipe.txt|20|CorruptSaveException
+bad_16_wrong_header.txt|1|CorruptSaveException
+bad_17_line_deleted_gold.txt|4|CorruptSaveException
+bad_18_two_bad_lines_first_is_reported.txt|4|CorruptSaveException
+bad_19_not_a_save_at_all.txt|1|CorruptSaveException
+bad_20_empty_file.txt|0|UnreadableSaveException
+bad_21_not_utf8_text.txt|0|UnreadableSaveException
+bad_22_line_deleted_seeds.txt|8|CorruptSaveException
+bad_23_line_deleted_day.txt|2|CorruptSaveException
+ok_01_blank_lines_between.txt|0|OK
+ok_02_windows_crlf.txt|0|OK
+ok_03_utf8_bom.txt|0|OK

@@ -1,0 +1,20 @@
+little-farm save 2
+day 12
+weather RAINY
+gold 840
+earned 1520
+can 14
+seeds Turnip 3
+seeds Potato 2
+seeds Strawberry 0
+basket Turnip 4
+basket Potato 1
+basket Strawberry Cake 1
+villager 2 3
+request Potato 3 540 4
+soil 4 6 Turnip 2 wet
+soil 5 6 Potato 1 wet
+soil 6 6 Strawberry 3 wet
+soil 7 6 - 0 wet
+soil 4 7 - 0 wet
+machine PROCESSING 2 Strawberry Cake
